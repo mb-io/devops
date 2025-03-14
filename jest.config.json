@@ -1,0 +1,13 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "transform": {
+    "^.+\\.ts$": "ts-jest"
+  },
+  "collectCoverage": true,
+  "coverageReporters": ["lcov", "text-summary"],
+  "collectCoverageFrom": ["**/lib/**/action.js"],
+  "coveragePathIgnorePatterns": ["/node_modules/", "/__tests__/"],
+  "testPathIgnorePatterns": ["/node_modules/"],
+  "testMatch": ["**/lib/**/test.js"]
+}
