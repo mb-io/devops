@@ -32,8 +32,7 @@
     "husky:prepare": "node ./node_scripts/delete-husky.mjs && husky"
   },
   "lint-staged": {
-    "*.{ts,js}": "eslint --cache --fix",
-    "*.{ts,js,md}": "prettier --write"
+    "*.{ts,js}": "eslint --cache --fix"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
