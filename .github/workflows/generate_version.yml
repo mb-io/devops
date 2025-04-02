@@ -1,0 +1,28 @@
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "New version number"
+        value: ${{ jobs.pre-build.outputs.new_tag }}
+
+jobs:
+  pre-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_tag: ${{ steps.set-version.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: set-version
+        uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+          RELEASE_BRANCHES: main
+          DEFAULT_BUMP: patch
+          if: ${{ !contains(github.ref, 'main') }}
+          PRERELEASE: true
+          PRERELEASE_SIFFIX: "-dev"

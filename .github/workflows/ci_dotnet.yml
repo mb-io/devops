@@ -1,0 +1,117 @@
+on:
+  workflow_call:
+    inputs:
+      buildParameters:
+        type: string
+        default: ${{ vars.DOTNET_BUILD_PARAMETERS || '' }}
+      coverageThreshold:
+        type: string
+        default: ${{ vars.COVERAGE_THRESHOLD || '20' }}
+      dotnetVersion:
+        type: string
+        default: ${{ vars.DOTNET_VERSION || '6' }}
+      dryRun:
+        type: boolean
+        default: ${{ false }}
+      projOrSolutionPathToBuild:
+        description: "Path to the csproj or sln to build"
+        type: string
+        default: ${{ vars.PROJ_OR_SOLUTION_PATH_TO_BUILD || './*.sln' }}
+      projOrSolutionToTest:
+        description: "Path to the csproj or sln to test"
+        type: string
+        default: ${{ vars.PROJ_OR_SOLUTION_TO_TEST || './*.sln' }}
+      projectsToPublish:
+        type: string
+        description: |
+          WebApi Example:
+          [
+            {
+              "projectName": "WebApi", //required
+              "projectPath": "*/WebApi.csproj", //required
+              "publishPath": "./artifacts/WebApi"
+            }
+          ]
+        default: ${{ vars.DOTNET_APPS_TO_PUBLISH || '' }}
+      testsCollectorFriendlyName:
+        type: string
+        description: 'friendlyName of the data collector used for coverage ("Code Coverage", "XPlat Code Coverage")'
+        default: ${{ vars.TESTS_COLLECTOR_FRIENDLY_NAME || 'Tests' }}
+      testsMaxRetries:
+        description: "Maximum number of retries for tests"
+        type: number
+        default: ${{ fromJson(vars.TESTS_MAX_RETRIES || '1') }}
+      testsRunSettingsPath:
+        description: "Path to the runsettings file"
+        type: string
+        default: ${{ vars.TESTS_RUNSETTINGS_PATH || '' }}
+      runSonarQube:
+        type: boolean
+        default: ${{ fromJson(vars.RUN_SONARQUBE || 'false') }}
+      runTests:
+        type: boolean
+        default: true
+      sonarQubeProjectKey:
+        type: string
+        default: ${{ vars.SONARQUBE_PROJECT_KEY || '' }}
+      sonarQubeHostUrl:
+        type: string
+        default: ${{ vars.SONARQUBE_HOST_URL || '' }}
+      uploadingNugetArtifacts:
+        type: boolean
+        default: false
+    outputs:
+      releaseTitle:
+        description: "The title of the release"
+        value: ${{ jobs.build.outputs.releaseTitle }}
+      releaseVersion:
+        description: "The version/tag of the release"
+        value: ${{ jobs.build.outputs.releaseVersion }}
+    secrets:
+      AZURE_ARTIFACTS_TOKEN:
+        required: true
+      SONAR_TOKEN:
+        required: true
+
+env:
+  SONAR_SCANNER_PATH: /home/runner/.sonar/scanner/dotnet-sonarscanner
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET || null }}
+  TARGET_FRAMEWORK: ${{ inputs.dotnetVersion == 6 && '-p:TargetFramework=net6.0' || '-p:TargetFramework=net8.0' }}
+
+jobs:
+  build:
+    name: "Build & Test"
+    runs-on: ubuntu-latest
+
+    outputs:
+      releaseTitle: ${{ steps.set-version.outputs.release_title }}
+      releaseVersion: ${{ steps.set-version.outputs.release_version }}
+
+    steps:
+      - name: Set fetch-depth
+        id: set-fetch-depth
+        run: |
+          if [ "${{ inputs.runSonarQube }}" = "true" ]; then
+            echo "fetch-depth=0" >> $GITHUB_OUTPUT
+          else
+            echo "fetch-depth=1" >> $GITHUB_OUTPUT
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ steps.set-fetch-depth.outputs.fetch-depth }}
+
+      - if: inputs.runSonarQube == true
+        name: SonarQube Begin
+        run: |
+          sonarCoveragePath=${{ inputs.testsCollectorFriendlyName == 'Code Coverage' && '/d:sonar.cs.vscoveragexml.reportsPaths=coverage/*/*.xml' || '/d:sonar.cs.opencover.reportsPaths=coverage/*/coverage.opencover.xml' }}
+          $SONAR_SCANNER_PATH begin /k:${{ inputs.sonarQubeProjectKey }} /d:sonar.token=${{ secrets.SONAR_TOKEN }} /d:sonar.host.url=${{ inputs.sonarQubeHostUrl }} $sonarCoveragePath
+
+      - name: Create nuget.config
+        shell: bash
+        run: |
+          rm -f nuget.config
+          dotnet new nugetconfig --force
+          dotnet nuget add source ""
